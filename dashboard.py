@@ -49,11 +49,16 @@ for t, cnt in stats["by_theme"].items():
 st.sidebar.divider()
 if st.sidebar.button("🔄 今すぐ収集する"):
     with st.spinner("収集中（1〜2分）..."):
-        from collectors.rss import collect_rss
-        from collectors.arxiv import collect_arxiv
-        collect_rss()
-        collect_arxiv()
-    st.sidebar.success("収集完了！")
+        try:
+            from collectors.rss import collect_rss
+            from collectors.arxiv import collect_arxiv
+            rss_count = collect_rss()
+            arxiv_count = collect_arxiv()
+            st.sidebar.success(f"収集完了！ RSS:{rss_count}件, arXiv:{arxiv_count}件")
+        except Exception as e:
+            st.sidebar.error(f"エラー: {str(e)[:80]}")
+            import traceback
+            st.sidebar.write(traceback.format_exc()[:200])
     st.rerun()
 
 # ─── ヘルパー ─────────────────────────────────────────────
