@@ -17,7 +17,11 @@ def _strip_html(text: str) -> str:
 
 def _matches_keywords(text: str, keywords: list[str]) -> bool:
     text_lower = text.lower()
-    return any(kw.lower() in text_lower for kw in keywords)
+    # Match if ANY keyword is found (英語キーワード優先）
+    for kw in keywords:
+        if kw.lower() in text_lower:
+            return True
+    return False
 
 
 def _parse_date(entry) -> str:
@@ -55,21 +59,26 @@ def collect_rss():
                 pub_date = _parse_date(entry)
                 sc = score_article(theme, title, summary, source_name)
 
-                ok = save_article(
-                    theme=theme,
-                    title=title,
-                    title_ja=title_ja,
-                    url=link,
-                    source=source_name,
-                    published_at=pub_date,
-                    score=sc,
-                    summary=summary,
-                    action_hint=action_hint,
-                    content_type="news",
-                )
-                if ok:
-                    saved += 1
-                    print(f"  [saved] [{theme}] {title[:60]}")
+                try:
+                    ok = save_article(
+                        theme=theme,
+                        title=title,
+                        title_ja=title_ja,
+                        url=link,
+                        source=source_name,
+                        published_at=pub_date,
+                        score=sc,
+                        summary=summary,
+                        action_hint=action_hint,
+                        content_type="news",
+                    )
+                    if ok:
+                        saved += 1
+                        print(f"  [saved] [{theme}] {title[:60]}")
+                    else:
+                        print(f"  [failed] {source_name}: {title[:50]}")
+                except Exception as e:
+                    print(f"  [error] {source_name}: {str(e)[:60]}")
 
     print(f"RSS収集完了: {saved}件保存")
     return saved
