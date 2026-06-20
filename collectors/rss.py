@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 from config import THEMES
 from db.database import save_article
-from analyzer.mock import generate_hint
+from analyzer.gemini import generate_hint
 from collectors.summarizer import build_summary, translate_to_ja
 from analyzer.scorer import score_article
 
