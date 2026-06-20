@@ -6,8 +6,15 @@ from dotenv import load_dotenv
 # 環境変数を読み込む
 load_dotenv()
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
+# Streamlit secrets または環境変数から読み込む
+try:
+    import streamlit as st
+    SUPABASE_URL = st.secrets.get("SUPABASE_URL") or os.environ.get("SUPABASE_URL", "")
+    SUPABASE_KEY = st.secrets.get("SUPABASE_KEY") or os.environ.get("SUPABASE_KEY", "")
+except:
+    # Streamlit 外で実行される場合
+    SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+    SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
 HEADERS = {
     "apikey": SUPABASE_KEY,
