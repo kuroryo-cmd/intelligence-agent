@@ -3,6 +3,16 @@ from datetime import datetime, timedelta
 from db.database import init_db, get_articles, get_stats, toggle_featured, get_featured, get_archive
 from config import THEMES
 
+def format_date(date_str):
+    """YYYY-MM-DD を年月日形式に変換"""
+    if not date_str:
+        return ""
+    try:
+        dt = datetime.strptime(date_str[:10], "%Y-%m-%d")
+        return dt.strftime("%Y年%-m月%-d日").replace("%-m", str(dt.month)).replace("%-d", str(dt.day))
+    except:
+        return date_str
+
 st.set_page_config(
     page_title="Intelligence Agent",
     page_icon="🔍",
@@ -80,11 +90,11 @@ def render_card(art):
     color = THEMES.get(art["theme"], {}).get("color", "#888")
     title_ja = art.get("title_ja") or art["title"]
     title_en = art["title"].replace("[論文] ", "")
-    pub = art.get("published_at", "")
+    pub = format_date(art.get("published_at", ""))
     src = art.get("source", "")
     return f"""
 <div style="border-left:4px solid {color};padding:14px 18px;margin-bottom:12px;background:#fafafa;border-radius:6px;">
-  <div style="margin-bottom:8px;">{badge(art['theme'], color)}{source_chip(src)}<span style="font-size:12px;color:#aaa;">{pub}</span></div>
+  <div style="margin-bottom:8px;">{badge(art['theme'], color)}{source_chip(src)}<span style="font-size:13px;color:#666;font-weight:500;">{pub}</span></div>
   <div style="font-size:21px;font-weight:bold;color:#111;margin-bottom:4px;line-height:1.4;">{title_ja[:80]}</div>
   <div style="font-size:14px;color:#888;margin-bottom:10px;">{title_en[:90]}</div>
   <a href="{art['url']}" target="_blank" style="font-size:14px;color:{color};text-decoration:none;font-weight:bold;">元記事を読む →</a>
@@ -145,7 +155,7 @@ for theme in themes_to_show:
             with col_meta:
                 st.markdown(
                     f'{badge(art["theme"], color2)}{source_chip(art["source"])}'
-                    f'<span style="font-size:12px;color:#aaa;">{art["published_at"]}</span>',
+                    f'<span style="font-size:13px;color:#666;font-weight:500;">{format_date(art["published_at"])}</span>',
                     unsafe_allow_html=True
                 )
             with col_btn:
