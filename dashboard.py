@@ -4,14 +4,20 @@ from db.database import init_db, get_articles, get_stats, toggle_featured, get_f
 from config import THEMES
 
 def format_date(date_str):
-    """YYYY-MM-DD を年月日形式に変換"""
+    """複数の日付形式に対応して年月日形式に変換"""
     if not date_str:
         return ""
     try:
-        dt = datetime.strptime(date_str[:10], "%Y-%m-%d")
-        return dt.strftime("%Y年%-m月%-d日").replace("%-m", str(dt.month)).replace("%-d", str(dt.day))
+        # ISO形式（YYYY-MM-DD）
+        try:
+            dt = datetime.strptime(date_str[:10], "%Y-%m-%d")
+        except:
+            # RFC形式（Tue, 13 Jan 2026...）
+            dt = datetime.strptime(date_str[:16], "%a, %d %b %Y")
+
+        return f"{dt.year}年{dt.month}月{dt.day}日"
     except:
-        return date_str
+        return date_str[:10]
 
 st.set_page_config(
     page_title="Intelligence Agent",
