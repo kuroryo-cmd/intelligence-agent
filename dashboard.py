@@ -1,6 +1,6 @@
 import streamlit as st
 from datetime import datetime, timedelta
-from db.database import init_db, get_articles, get_stats, get_conn, toggle_featured, get_featured, get_archive
+from db.database import init_db, get_articles, get_stats, toggle_featured, get_featured, get_archive
 from config import THEMES
 
 st.set_page_config(
