@@ -1,6 +1,10 @@
 import os
 from datetime import datetime
+from dotenv import load_dotenv
 from supabase import create_client, Client
+
+# 環境変数を読み込む
+load_dotenv()
 
 # Supabase の URL と キーを環境変数から取得
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "http://localhost:54321")
@@ -54,7 +58,9 @@ def save_article(theme, title, url, source, published_at, summary, action_hint, 
             "score": score,
         }).execute()
         return True
-    except Exception:
+    except Exception as e:
+        import sys
+        print(f"    [save_error] {type(e).__name__}: {str(e)[:100]}", file=sys.stderr)
         return False
 
 
