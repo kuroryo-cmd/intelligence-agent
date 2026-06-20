@@ -48,17 +48,16 @@ def translate_to_ja(text: str) -> str:
 
 def build_summary(rss_summary: str, url: str) -> str:
     """
-    RSS要旨が短い・英語の場合は記事本文を取得して翻訳し、読める要旨を返す。
+    RSS要旨を使う（記事本文取得はスキップして高速化）
     """
     clean = _strip_html(rss_summary)
 
-    # RSS要旨が十分な長さ（200文字超）なら翻訳だけする
-    if len(clean) >= 200:
-        source_text = clean[:800]
-    else:
-        # 短い場合は記事本文を取得
+    # 要旨がない場合のみフォールバック
+    if len(clean) < 50:
         body = fetch_body(url)
-        source_text = body if len(body) > len(clean) else clean
+        source_text = body if body else "記事を取得できませんでした"
+    else:
+        source_text = clean[:800]
 
     if not source_text:
         return "（要旨を取得できませんでした）"
