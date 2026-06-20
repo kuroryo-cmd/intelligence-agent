@@ -1,9 +1,8 @@
 import os
-import re
-import google.generativeai as genai
+import requests
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-genai.configure(api_key=GEMINI_API_KEY)
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
 
 THEME_CONTEXT = {
     "Agentic AI": "You are an expert in AI agent technology and business strategy. Generate a specific, actionable suggestion for how to use this article in a business proposal or newsletter.",
@@ -13,7 +12,7 @@ THEME_CONTEXT = {
 
 
 def generate_hint(theme: str, title: str = "", summary: str = "") -> str:
-    """Gemini API を使用して、記事から具体的な示唆を生成"""
+    """Gemini API（HTTP）を使用して、記事から具体的な示唆を生成"""
     if not GEMINI_API_KEY:
         return f"「{title[:50]}」を提案資料のトレンド根拠として活用できます。"
 
@@ -33,15 +32,27 @@ Keep it under 100 words. Start directly with the suggestion, no preamble.
 """
 
     try:
-        model = genai.GenerativeModel("gemini-pro")
-        response = model.generate_content(prompt, stream=False)
-        hint = response.text.strip()
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": prompt}
+                    ]
+                }
+            ]
+        }
+        params = {"key": GEMINI_API_KEY}
+        response = requests.post(GEMINI_API_URL, json=payload, params=params, timeout=10)
+        response.raise_for_status()
 
-        # 結果が空の場合はフォールバック
-        if not hint or len(hint) < 10:
-            return f"「{title[:50]}」を提案資料/メルマガのトレンド根拠として活用できます。"
+        result = response.json()
+        if "candidates" in result and result["candidates"]:
+            hint = result["candidates"][0]["content"]["parts"][0]["text"].strip()
+            if hint and len(hint) >= 10:
+                return hint
 
-        return hint
+        return f"「{title[:50]}」を提案資料/メルマガのトレンド根拠として活用できます。"
+
     except Exception as e:
         # API エラー時はフォールバック
         return f"「{title[:50]}」を提案資料のトレンド根拠として活用できます。"
