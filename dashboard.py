@@ -297,9 +297,14 @@ if not articles:
 papers = [a for a in articles if a["content_type"] == "paper"]
 news   = [a for a in articles if a["content_type"] == "news"]
 
-# ─── ハイライト ───────────────────────────────────────────
+# ─── ハイライト（テーマごとに均等に最大2件ずつ） ────────────
 st.subheader("⚡ 今週のハイライト")
-highlights = news[:6]
+highlights = []
+theme_list = list(THEMES.keys()) if selected_theme == "すべて" else [selected_theme]
+for t in theme_list:
+    theme_news = [a for a in news if a["theme"] == t]
+    highlights.extend(theme_news[:2])
+highlights = highlights[:6]
 if highlights:
     cols = st.columns(min(len(highlights), 3))
     for i, art in enumerate(highlights):
