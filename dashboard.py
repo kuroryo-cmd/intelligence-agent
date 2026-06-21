@@ -79,6 +79,11 @@ for t, cnt in stats["by_theme"].items():
     st.sidebar.markdown(f'<span style="color:{color}">●</span> {t}: **{cnt}件**', unsafe_allow_html=True)
 
 st.sidebar.divider()
+if st.sidebar.button("⚙️ 設定・管理", use_container_width=True):
+    st.session_state["page"] = "settings" if st.session_state.get("page") != "settings" else "main"
+    st.rerun()
+
+st.sidebar.divider()
 if st.sidebar.button("🔄 今すぐ収集する"):
     with st.spinner("収集中（1〜2分）..."):
         try:
@@ -138,6 +143,145 @@ def render_card(art):
   </div>
 </div>
 """
+
+# ─── ページ切り替え ──────────────────────────────────────
+if st.session_state.get("page") == "settings":
+    st.title("⚙️ 設定・管理")
+    tab_theme, tab_kw, tab_comp = st.tabs(["🌐 テーマ管理", "🔑 キーワード管理", "🎯 競合管理"])
+
+    # ─── テーマ管理 ────────────────────────────────────────
+    with tab_theme:
+        st.markdown("### テーマの追加・編集・削除")
+        with st.form("add_theme_form"):
+            st.markdown("**新しいテーマを追加**")
+            col_n, col_c = st.columns([2, 1])
+            with col_n:
+                new_theme_name = st.text_input("テーマ名", placeholder="例：MaaS, Web3, 量子コンピュータ")
+            with col_c:
+                new_theme_color = st.color_picker("カラー", value="#4F8EF7")
+            new_theme_desc = st.text_input("説明（オプション）", placeholder="例：forward deployed engineer, SaaS implementation")
+            if st.form_submit_button("🌐 追加"):
+                if new_theme_name.strip():
+                    ok = add_theme(new_theme_name.strip(), new_theme_color, new_theme_desc.strip())
+                    if ok:
+                        st.success(f"✅ 「{new_theme_name}」を追加。キーワードを登録すると収集が有効になります。")
+                        st.rerun()
+                    else:
+                        st.error("⚠️ 追加失敗（テーマ名重複の可能性）")
+                else:
+                    st.warning("テーマ名を入力してください")
+
+        st.divider()
+        st.markdown("### 現在のテーマ一覧")
+        db_themes_list = get_themes()
+        if db_themes_list:
+            for t in db_themes_list:
+                col_dot, col_info, col_edit, col_del = st.columns([0.3, 3.5, 1.2, 0.8])
+                with col_dot:
+                    st.markdown(f'<div style="width:24px;height:24px;background:{t["color"]};border-radius:50%;margin-top:8px;"></div>', unsafe_allow_html=True)
+                with col_info:
+                    st.markdown(f"**{t['name']}**")
+                    if t.get("description"):
+                        st.caption(t["description"])
+                with col_edit:
+                    if st.button("✏️ 編集", key=f"edit_theme_{t['id']}"):
+                        st.session_state[f"editing_{t['id']}"] = not st.session_state.get(f"editing_{t['id']}", False)
+                        st.rerun()
+                with col_del:
+                    if st.button("🗑️", key=f"del_theme_{t['id']}"):
+                        if delete_theme(t["id"]):
+                            st.rerun()
+
+                if st.session_state.get(f"editing_{t['id']}"):
+                    with st.form(f"edit_form_{t['id']}"):
+                        e_name  = st.text_input("テーマ名", value=t["name"])
+                        e_color = st.color_picker("カラー", value=t["color"])
+                        e_desc  = st.text_input("説明", value=t.get("description", ""))
+                        if st.form_submit_button("💾 保存"):
+                            if update_theme(t["id"], e_name.strip(), e_color, e_desc.strip()):
+                                st.session_state.pop(f"editing_{t['id']}", None)
+                                st.rerun()
+        else:
+            st.info("テーマが登録されていません")
+
+    # ─── キーワード管理 ───────────────────────────────
+    with tab_kw:
+        st.markdown("### キーワードの追加・削除")
+        theme_names = [t["name"] for t in get_themes()] or list(THEMES.keys())
+        col_t, col_k = st.columns([1, 2])
+        with col_t:
+            theme_sel = st.selectbox("テーマ", theme_names, key="kw_theme")
+        with col_k:
+            new_kw = st.text_input("新しいキーワード", placeholder="例：langchain, agent framework")
+        if st.button("🔑 追加", key="add_kw"):
+            if new_kw.strip():
+                if add_keyword(theme_sel, new_kw.strip()):
+                    st.success(f"✅ '{new_kw}' を追加しました")
+                    st.rerun()
+                else:
+                    st.error("⚠️ 追加失敗（重複の可能性）")
+            else:
+                st.warning("キーワードを入力してください")
+
+        st.divider()
+        st.markdown("### 現在のキーワード一覧")
+        all_keywords = get_keywords()
+        if all_keywords:
+            for theme in theme_names:
+                theme_kws = [k for k in all_keywords if k["theme"] == theme]
+                if theme_kws:
+                    color = THEMES.get(theme, {}).get("color", "#888")
+                    st.markdown(f'<h4 style="color:{color}">● {theme}</h4>', unsafe_allow_html=True)
+                    for kw in theme_kws:
+                        c1, c2 = st.columns([4, 1])
+                        with c1:
+                            st.caption(f"• {kw['keyword']}")
+                        with c2:
+                            if st.button("🗑️", key=f"del_kw_{kw['id']}"):
+                                if delete_keyword(kw["id"]):
+                                    st.rerun()
+        else:
+            st.info("まだキーワードが登録されていません")
+
+    # ─── 競合管理 ──────────────────────────────────────
+    with tab_comp:
+        st.markdown("### 競合の追加・削除")
+        col_n, col_u = st.columns([1.5, 2])
+        with col_n:
+            comp_name = st.text_input("競合名", placeholder="例：Notion AI, Glean")
+        with col_u:
+            comp_url = st.text_input("URL", placeholder="https://example.com")
+        comp_memo = st.text_area("メモ", placeholder="競合の特徴、提供内容など")
+        if st.button("🎯 追加", key="add_comp"):
+            if comp_name.strip():
+                if add_competitor(comp_name.strip(), comp_url.strip(), comp_memo.strip()):
+                    st.success(f"✅ '{comp_name}' を追加しました")
+                    st.rerun()
+                else:
+                    st.error("⚠️ 追加失敗（重複の可能性）")
+            else:
+                st.warning("競合名を入力してください")
+
+        st.divider()
+        st.markdown("### 競合一覧")
+        competitors = get_competitors()
+        if competitors:
+            for comp in competitors:
+                c1, c2 = st.columns([4, 1])
+                with c1:
+                    st.markdown(f"**{comp['name']}**")
+                    if comp["url"]:
+                        st.caption(f"🔗 {comp['url']}")
+                    if comp["memo"]:
+                        st.caption(f"📝 {comp['memo']}")
+                with c2:
+                    if st.button("🗑️", key=f"del_comp_{comp['id']}"):
+                        if delete_competitor(comp["id"]):
+                            st.rerun()
+        else:
+            st.info("まだ競合が登録されていません")
+
+    st.stop()
 
 # ─── メインエリア ─────────────────────────────────────────
 title = selected_theme if selected_theme != "すべて" else "全テーマ"
@@ -411,167 +555,3 @@ with tab_saved:
                             toggle_featured(art["id"])
                             st.rerun()
 
-st.divider()
-
-# ─── 設定画面（⚙️ Settings） ──────────────────────────────
-with st.expander("⚙️ 設定（テーマ・キーワード・競合管理）"):
-    st.subheader("🔧 管理画面")
-    tab_theme, tab_kw, tab_comp = st.tabs(["🌐 テーマ管理", "🔑 キーワード管理", "🎯 競合管理"])
-
-    # ─── テーマ管理 ────────────────────────────────────────
-    with tab_theme:
-        st.markdown("### テーマの追加・編集・削除")
-
-        # 新規追加フォーム
-        with st.form("add_theme_form"):
-            st.markdown("**新しいテーマを追加**")
-            col_name, col_color = st.columns([2, 1])
-            with col_name:
-                new_theme_name = st.text_input("テーマ名", placeholder="例：MaaS, Web3, 量子コンピュータ")
-            with col_color:
-                new_theme_color = st.color_picker("テーマカラー", value="#4F8EF7")
-            new_theme_desc = st.text_input("説明（オプション）", placeholder="例：mobility as a service, smart mobility")
-            submitted = st.form_submit_button("🌐 テーマ追加")
-            if submitted:
-                if new_theme_name.strip():
-                    ok = add_theme(new_theme_name.strip(), new_theme_color, new_theme_desc.strip())
-                    if ok:
-                        st.success(f"✅ 「{new_theme_name}」を追加しました。config.py に RSS/arXiv クエリを追加することで収集が有効になります。")
-                        st.rerun()
-                    else:
-                        st.error("⚠️ 追加に失敗しました（テーマ名が重複している可能性）")
-                else:
-                    st.warning("テーマ名を入力してください")
-
-        st.divider()
-
-        # 現在のテーマ一覧（編集・削除）
-        st.markdown("### 現在のテーマ一覧")
-        db_themes_list = get_themes()
-        if db_themes_list:
-            for t in db_themes_list:
-                col_color_prev, col_info, col_edit, col_del = st.columns([0.3, 3, 1.5, 0.8])
-                with col_color_prev:
-                    st.markdown(
-                        f'<div style="width:28px;height:28px;background:{t["color"]};border-radius:50%;margin-top:6px;"></div>',
-                        unsafe_allow_html=True
-                    )
-                with col_info:
-                    st.markdown(f"**{t['name']}**")
-                    if t.get("description"):
-                        st.caption(t["description"])
-                with col_edit:
-                    if st.button("✏️ 編集", key=f"edit_theme_{t['id']}"):
-                        st.session_state[f"editing_theme_{t['id']}"] = True
-
-                    if st.session_state.get(f"editing_theme_{t['id']}"):
-                        with st.form(f"edit_theme_form_{t['id']}"):
-                            e_name  = st.text_input("テーマ名", value=t["name"])
-                            e_color = st.color_picker("カラー", value=t["color"])
-                            e_desc  = st.text_input("説明", value=t.get("description", ""))
-                            if st.form_submit_button("保存"):
-                                ok = update_theme(t["id"], e_name.strip(), e_color, e_desc.strip())
-                                if ok:
-                                    st.success("✅ 更新しました")
-                                    st.session_state.pop(f"editing_theme_{t['id']}", None)
-                                    st.rerun()
-                                else:
-                                    st.error("更新に失敗しました")
-                with col_del:
-                    if st.button("🗑️", key=f"del_theme_{t['id']}"):
-                        ok = delete_theme(t["id"])
-                        if ok:
-                            st.success("削除しました")
-                            st.rerun()
-
-        else:
-            st.info("テーマが登録されていません")
-
-        st.info("💡 **新テーマ追加後**: `config.py` の `THEMES_RSS` と `THEMES_ARXIV` にそのテーマ名でRSSフィード・arXivクエリを追加すると収集が有効になります。")
-
-
-    # ─── キーワード管理 ───────────────────────────────
-    with tab_kw:
-        st.markdown("### キーワードの追加・削除")
-        theme_names = [t["name"] for t in get_themes()] or list(THEMES.keys())
-        col_theme, col_kw = st.columns([1, 2])
-        with col_theme:
-            theme_sel = st.selectbox("テーマ", theme_names, key="kw_theme")
-        with col_kw:
-            new_kw = st.text_input("新しいキーワード", placeholder="例：langchain, agent framework")
-
-        if st.button("🔑 キーワード追加", key="add_kw"):
-            if new_kw.strip():
-                ok = add_keyword(theme_sel, new_kw.strip())
-                if ok:
-                    st.success(f"✅ '{new_kw}' を {theme_sel} に追加しました")
-                    st.rerun()
-                else:
-                    st.error("⚠️ 追加に失敗しました（重複の可能性）")
-            else:
-                st.warning("キーワードを入力してください")
-
-        st.divider()
-        st.markdown("### 現在のキーワード一覧")
-        all_keywords = get_keywords()
-        if all_keywords:
-            for theme in theme_names:
-                theme_kws = [k for k in all_keywords if k["theme"] == theme]
-                if theme_kws:
-                    color = THEMES.get(theme, {}).get("color", "#888")
-                    st.markdown(f'<h4 style="color:{color}">● {theme}</h4>', unsafe_allow_html=True)
-                    for kw in theme_kws:
-                        col_kw_name, col_del = st.columns([4, 1])
-                        with col_kw_name:
-                            st.caption(f"• {kw['keyword']}")
-                        with col_del:
-                            if st.button("🗑️", key=f"del_kw_{kw['id']}"):
-                                ok = delete_keyword(kw["id"])
-                                if ok:
-                                    st.success("削除しました")
-                                    st.rerun()
-        else:
-            st.info("まだキーワードが登録されていません")
-
-    # ─── 競合管理 ──────────────────────────────────────
-    with tab_comp:
-        st.markdown("### 競合の追加・削除")
-        col_name, col_url = st.columns([1.5, 2])
-        with col_name:
-            comp_name = st.text_input("競合名", placeholder="例：Notionai, Kernal")
-        with col_url:
-            comp_url = st.text_input("URL", placeholder="https://example.com")
-
-        comp_memo = st.text_area("メモ", placeholder="競合の特徴、提供内容など")
-
-        if st.button("🎯 競合追加", key="add_comp"):
-            if comp_name.strip():
-                ok = add_competitor(comp_name.strip(), comp_url.strip(), comp_memo.strip())
-                if ok:
-                    st.success(f"✅ '{comp_name}' を追加しました")
-                    st.rerun()
-                else:
-                    st.error("⚠️ 追加に失敗しました（重複の可能性）")
-            else:
-                st.warning("競合名を入力してください")
-
-        st.divider()
-        st.markdown("### 競合一覧")
-        competitors = get_competitors()
-        if competitors:
-            for comp in competitors:
-                col_info, col_del = st.columns([4, 1])
-                with col_info:
-                    st.markdown(f"**{comp['name']}**")
-                    if comp["url"]:
-                        st.caption(f"🔗 {comp['url']}")
-                    if comp["memo"]:
-                        st.caption(f"📝 {comp['memo']}")
-                with col_del:
-                    if st.button("🗑️", key=f"del_comp_{comp['id']}"):
-                        ok = delete_competitor(comp["id"])
-                        if ok:
-                            st.success("削除しました")
-                            st.rerun()
-        else:
-            st.info("まだ競合が登録されていません")
