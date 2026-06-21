@@ -74,8 +74,9 @@ selected_theme = st.sidebar.radio("テーマを選択", theme_options)
 st.sidebar.divider()
 stats = get_stats()
 st.sidebar.metric("総収集件数", stats["total"])
-for t, cnt in stats["by_theme"].items():
+for t in THEMES.keys():
     color = THEMES.get(t, {}).get("color", "#888")
+    cnt = stats["by_theme"].get(t, 0)
     st.sidebar.markdown(f'<span style="color:{color}">●</span> {t}: **{cnt}件**', unsafe_allow_html=True)
 
 st.sidebar.divider()
