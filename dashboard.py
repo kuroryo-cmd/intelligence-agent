@@ -1,7 +1,23 @@
 import streamlit as st
 from datetime import datetime, timedelta
-from db.database import init_db, get_articles, get_stats, toggle_featured, get_featured, get_archive
-from config import THEMES
+from db.database import (
+    init_db, get_articles, get_stats, toggle_featured, get_featured, get_archive,
+    get_keywords, add_keyword, delete_keyword,
+    get_competitors, add_competitor, delete_competitor,
+    get_themes, add_theme, update_theme, delete_theme,
+)
+from config import THEMES as THEMES_FALLBACK
+
+
+def _load_themes() -> dict:
+    """Supabase からテーマを動的に読み込む。失敗時は config フォールバック。"""
+    db_themes = get_themes()
+    if not db_themes:
+        return THEMES_FALLBACK
+    return {t["name"]: {"color": t.get("color", "#888"), "description": t.get("description", "")} for t in db_themes}
+
+
+THEMES = _load_themes()
 
 def format_date(date_str):
     """複数の日付形式に対応して年月日形式に変換"""
@@ -59,7 +75,7 @@ st.sidebar.divider()
 stats = get_stats()
 st.sidebar.metric("総収集件数", stats["total"])
 for t, cnt in stats["by_theme"].items():
-    color = THEMES[t]["color"]
+    color = THEMES.get(t, {}).get("color", "#888")
     st.sidebar.markdown(f'<span style="color:{color}">●</span> {t}: **{cnt}件**', unsafe_allow_html=True)
 
 st.sidebar.divider()
@@ -98,12 +114,28 @@ def render_card(art):
     title_en = art["title"].replace("[論文] ", "")
     pub = format_date(art.get("published_at", ""))
     src = art.get("source", "")
+    score = art.get("score", 0)
+
+    # スコアに応じた背景色（重要度の可視化）
+    if score >= 4.0:
+        bg_color = "#fffbf0"
+    elif score >= 3.0:
+        bg_color = "#fafafa"
+    else:
+        bg_color = "#ffffff"
+
     return f"""
-<div style="border-left:4px solid {color};padding:14px 18px;margin-bottom:12px;background:#fafafa;border-radius:6px;">
-  <div style="margin-bottom:8px;">{badge(art['theme'], color)}{source_chip(src)}<span style="font-size:13px;color:#666;font-weight:500;">{pub}</span></div>
-  <div style="font-size:21px;font-weight:bold;color:#111;margin-bottom:4px;line-height:1.4;">{title_ja[:80]}</div>
-  <div style="font-size:14px;color:#888;margin-bottom:10px;">{title_en[:90]}</div>
-  <a href="{art['url']}" target="_blank" style="font-size:14px;color:{color};text-decoration:none;font-weight:bold;">元記事を読む →</a>
+<div style="border-left:6px solid {color};padding:16px 20px;margin-bottom:14px;background:{bg_color};border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+    <div>{badge(art['theme'], color)}{source_chip(src)}</div>
+    <span style="font-size:11px;color:#aaa;font-weight:600;">{pub}</span>
+  </div>
+  <div style="font-size:23px;font-weight:900;color:#222;margin-bottom:6px;line-height:1.35;letter-spacing:-0.5px;">{title_ja[:85]}</div>
+  <div style="font-size:13px;color:#999;margin-bottom:12px;line-height:1.5;">{title_en[:95]}</div>
+  <div style="display:flex;gap:12px;align-items:center;">
+    <a href="{art['url']}" target="_blank" style="font-size:13px;color:{color};text-decoration:none;font-weight:bold;padding:6px 10px;border:1.5px solid {color};border-radius:4px;display:inline-block;">記事を読む</a>
+    <span style="font-size:11px;color:#bbb;font-weight:600;">★ スコア {score:.1f}</span>
+  </div>
 </div>
 """
 
@@ -152,32 +184,59 @@ for theme in themes_to_show:
     for art in theme_all[:12]:
         title_ja = art.get("title_ja") or art["title"]
         title_en = art["title"]
-        icon = "🔬" if art["content_type"] == "paper" else "📄"
+        icon = "🔬" if art["content_type"] == "paper" else "📰"
         is_featured = bool(art.get("featured"))
         star = "⭐" if is_featured else "☆"
-        with st.expander(f"{icon} {title_ja[:60]}  ／  {title_en[:60]}"):
+        score = art.get("score", 0)
+
+        # スコアに応じた背景色
+        if score >= 4.0:
+            score_color = "#FF6B6B"
+        elif score >= 3.0:
+            score_color = "#FFA500"
+        else:
+            score_color = "#999"
+
+        with st.expander(f"{icon} {title_ja[:58]}  ／  {title_en[:50]}"):
             color2 = THEMES.get(art["theme"], {}).get("color", "#888")
-            col_meta, col_btn = st.columns([5, 1])
-            with col_meta:
-                st.markdown(
-                    f'{badge(art["theme"], color2)}{source_chip(art["source"])}'
-                    f'<span style="font-size:13px;color:#666;font-weight:500;">{format_date(art["published_at"])}</span>',
-                    unsafe_allow_html=True
-                )
-            with col_btn:
-                btn_label = f"{star} 注目"
+
+            # メタデータ行
+            st.markdown(
+                f'{badge(art["theme"], color2)}{source_chip(art["source"])}'
+                f'<span style="font-size:12px;color:{score_color};font-weight:700;">◆ {score:.1f}点</span>',
+                unsafe_allow_html=True
+            )
+            st.caption(format_date(art["published_at"]))
+
+            # タイトル
+            st.markdown(
+                f'<div style="font-size:22px;font-weight:900;color:#222;margin:12px 0 4px;letter-spacing:-0.5px;">{title_ja}</div>'
+                f'<div style="font-size:13px;color:#888;margin-bottom:14px;">{title_en}</div>',
+                unsafe_allow_html=True
+            )
+
+            # 要旨
+            st.markdown(f"**📌 要旨**\n\n{art['summary']}")
+
+            # 提案（背景色付き）
+            st.markdown(
+                f'<div style="background:#f9f4e6;border-left:3px solid {color2};padding:12px 14px;border-radius:4px;margin:12px 0;">'
+                f'<div style="font-weight:700;color:#222;margin-bottom:4px;">💡 提案資料・メルマガへの使い方</div>'
+                f'<div style="color:#555;font-size:14px;line-height:1.6;">{art["action_hint"]}</div>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+
+            # ボタン行
+            col_link, col_star = st.columns([3, 1])
+            with col_link:
+                link_label = "論文を読む" if art["content_type"] == "paper" else "元記事を読む"
+                st.markdown(f"[🔗 {link_label}]({art['url']})")
+            with col_star:
+                btn_label = f"{star} {'保存済' if is_featured else '注目'}"
                 if st.button(btn_label, key=f"feat_{art['id']}"):
                     toggle_featured(art["id"])
                     st.rerun()
-            st.markdown(
-                f'<div style="font-size:20px;font-weight:bold;color:#111;margin:10px 0 4px;">{title_ja}</div>'
-                f'<div style="font-size:13px;color:#888;margin-bottom:12px;">{title_en}</div>',
-                unsafe_allow_html=True
-            )
-            st.markdown(f"**要旨：** {art['summary']}")
-            st.markdown(f"**🎯 提案資料/メルマガへの示唆：** {art['action_hint']}")
-            link_label = "論文を読む →" if art["content_type"] == "paper" else "元記事を読む →"
-            st.markdown(f"[{link_label}]({art['url']})")
 
 st.divider()
 
@@ -191,21 +250,44 @@ if paper_list:
         title_en = art["title"].replace("[論文] ", "")
         is_featured = bool(art.get("featured"))
         star = "⭐" if is_featured else "☆"
+        sc = art.get("score", 0)
+
+        # スコアに応じた背景色
+        if sc >= 4.0:
+            score_color = "#FF6B6B"
+        elif sc >= 3.0:
+            score_color = "#FFA500"
+        else:
+            score_color = "#999"
+
         with st.expander(f"🔬 {title_ja[:55]}  ／  {title_en[:55]}"):
-            col_meta, col_btn = st.columns([5, 1])
-            with col_meta:
-                st.markdown(
-                    f'{badge(art["theme"], color)}{source_chip("arXiv")}'
-                    f'<span style="font-size:12px;color:#aaa;">{art["published_at"]}</span>',
-                    unsafe_allow_html=True
-                )
-            with col_btn:
-                if st.button(f"{star} 注目", key=f"feat_p_{art['id']}"):
+            st.markdown(
+                f'{badge(art["theme"], color)}{source_chip("arXiv")}'
+                f'<span style="font-size:12px;color:{score_color};font-weight:700;">◆ {sc:.1f}点</span>',
+                unsafe_allow_html=True
+            )
+            st.caption(format_date(art["published_at"]))
+
+            st.markdown(
+                f'<div style="font-size:22px;font-weight:900;color:#222;margin:12px 0 4px;letter-spacing:-0.5px;">{title_ja}</div>'
+                f'<div style="font-size:13px;color:#888;margin-bottom:14px;">{title_en}</div>',
+                unsafe_allow_html=True
+            )
+            st.markdown(f"**📌 要旨**\n\n{art['summary']}")
+            st.markdown(
+                f'<div style="background:#f9f4e6;border-left:3px solid {color};padding:12px 14px;border-radius:4px;margin:12px 0;">'
+                f'<div style="font-weight:700;color:#222;margin-bottom:4px;">💡 提案資料・メルマガへの使い方</div>'
+                f'<div style="color:#555;font-size:14px;line-height:1.6;">{art["action_hint"]}</div>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+            col_link, col_star = st.columns([3, 1])
+            with col_link:
+                st.markdown(f"[🔗 論文を読む]({art['url']})")
+            with col_star:
+                if st.button(f"{star} {'保存済' if is_featured else '注目'}", key=f"feat_p_{art['id']}"):
                     toggle_featured(art["id"])
                     st.rerun()
-            st.markdown(f"**要旨：** {art['summary']}")
-            st.markdown(f"**🎯 提案への示唆：** {art['action_hint']}")
-            st.markdown(f"[論文を読む →]({art['url']})")
 
 st.divider()
 
@@ -230,31 +312,48 @@ with tab_auto:
             for art in arts:
                 title_ja = art.get("title_ja") or art["title"]
                 title_en = art["title"].replace("[論文] ", "")
-                icon = "🔬" if art["content_type"] == "paper" else "📄"
+                icon = "🔬" if art["content_type"] == "paper" else "📰"
                 sc = art.get("score", 0)
                 is_featured = bool(art.get("featured"))
                 star = "⭐" if is_featured else "☆"
-                with st.expander(f"{icon} {title_ja[:65]}  ／  {title_en[:65]}"):
-                    col_meta, col_btn = st.columns([5, 1])
-                    with col_meta:
-                        st.markdown(
-                            f'{badge(theme, color)}{source_chip(art["source"])}'
-                            f'<span style="font-size:12px;color:#aaa;">{art["published_at"]} · スコア {sc}</span>',
-                            unsafe_allow_html=True
-                        )
-                    with col_btn:
-                        if st.button(f"{star} 保存", key=f"arc_feat_{art['id']}"):
-                            toggle_featured(art["id"])
-                            st.rerun()
+
+                # スコアに応じた背景色
+                if sc >= 4.0:
+                    score_color = "#FF6B6B"
+                elif sc >= 3.0:
+                    score_color = "#FFA500"
+                else:
+                    score_color = "#999"
+
+                with st.expander(f"{icon} {title_ja[:60]}  ／  {title_en[:60]}"):
                     st.markdown(
-                        f'<div style="font-size:20px;font-weight:bold;color:#111;margin:10px 0 4px;">{title_ja}</div>'
-                        f'<div style="font-size:13px;color:#888;margin-bottom:12px;">{title_en}</div>',
+                        f'{badge(theme, color)}{source_chip(art["source"])}'
+                        f'<span style="font-size:12px;color:{score_color};font-weight:700;">◆ {sc:.1f}点</span>',
                         unsafe_allow_html=True
                     )
-                    st.markdown(f"**要旨：** {art['summary']}")
-                    st.markdown(f"**🎯 提案資料/メルマガへの示唆：** {art['action_hint']}")
-                    link_label = "論文を読む →" if art["content_type"] == "paper" else "元記事を読む →"
-                    st.markdown(f"[{link_label}]({art['url']})")
+                    st.caption(format_date(art["published_at"]))
+
+                    st.markdown(
+                        f'<div style="font-size:22px;font-weight:900;color:#222;margin:12px 0 4px;letter-spacing:-0.5px;">{title_ja}</div>'
+                        f'<div style="font-size:13px;color:#888;margin-bottom:14px;">{title_en}</div>',
+                        unsafe_allow_html=True
+                    )
+                    st.markdown(f"**📌 要旨**\n\n{art['summary']}")
+                    st.markdown(
+                        f'<div style="background:#f9f4e6;border-left:3px solid {color};padding:12px 14px;border-radius:4px;margin:12px 0;">'
+                        f'<div style="font-weight:700;color:#222;margin-bottom:4px;">💡 提案資料・メルマガへの使い方</div>'
+                        f'<div style="color:#555;font-size:14px;line-height:1.6;">{art["action_hint"]}</div>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+                    col_link, col_star = st.columns([3, 1])
+                    with col_link:
+                        link_label = "論文を読む" if art["content_type"] == "paper" else "元記事を読む"
+                        st.markdown(f"[🔗 {link_label}]({art['url']})")
+                    with col_star:
+                        if st.button(f"{star} {'保存済' if is_featured else '保存'}", key=f"arc_feat_{art['id']}"):
+                            toggle_featured(art["id"])
+                            st.rerun()
 
 with tab_saved:
     featured_all = get_featured(theme=selected_theme)
@@ -271,25 +370,208 @@ with tab_saved:
             for art in arts:
                 title_ja = art.get("title_ja") or art["title"]
                 title_en = art["title"].replace("[論文] ", "")
-                icon = "🔬" if art["content_type"] == "paper" else "📄"
-                with st.expander(f"{icon} {title_ja[:65]}  ／  {title_en[:65]}"):
-                    col_meta, col_btn = st.columns([5, 1])
-                    with col_meta:
-                        st.markdown(
-                            f'{badge(theme, color)}{source_chip(art["source"])}'
-                            f'<span style="font-size:12px;color:#aaa;">{art["published_at"]}</span>',
-                            unsafe_allow_html=True
-                        )
-                    with col_btn:
+                icon = "🔬" if art["content_type"] == "paper" else "📰"
+                sc = art.get("score", 0)
+
+                # スコアに応じた背景色
+                if sc >= 4.0:
+                    score_color = "#FF6B6B"
+                elif sc >= 3.0:
+                    score_color = "#FFA500"
+                else:
+                    score_color = "#999"
+
+                with st.expander(f"{icon} {title_ja[:60]}  ／  {title_en[:60]}"):
+                    st.markdown(
+                        f'{badge(theme, color)}{source_chip(art["source"])}'
+                        f'<span style="font-size:12px;color:{score_color};font-weight:700;">◆ {sc:.1f}点</span>',
+                        unsafe_allow_html=True
+                    )
+                    st.caption(format_date(art["published_at"]))
+
+                    st.markdown(
+                        f'<div style="font-size:22px;font-weight:900;color:#222;margin:12px 0 4px;letter-spacing:-0.5px;">{title_ja}</div>'
+                        f'<div style="font-size:13px;color:#888;margin-bottom:14px;">{title_en}</div>',
+                        unsafe_allow_html=True
+                    )
+                    st.markdown(f"**📌 要旨**\n\n{art['summary']}")
+                    st.markdown(
+                        f'<div style="background:#f9f4e6;border-left:3px solid {color};padding:12px 14px;border-radius:4px;margin:12px 0;">'
+                        f'<div style="font-weight:700;color:#222;margin-bottom:4px;">💡 提案資料・メルマガへの使い方</div>'
+                        f'<div style="color:#555;font-size:14px;line-height:1.6;">{art["action_hint"]}</div>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+                    col_link, col_star = st.columns([3, 1])
+                    with col_link:
+                        link_label = "論文を読む" if art["content_type"] == "paper" else "元記事を読む"
+                        st.markdown(f"[🔗 {link_label}]({art['url']})")
+                    with col_star:
                         if st.button("⭐ 解除", key=f"unfeat_{art['id']}"):
                             toggle_featured(art["id"])
                             st.rerun()
+
+st.divider()
+
+# ─── 設定画面（⚙️ Settings） ──────────────────────────────
+with st.expander("⚙️ 設定（テーマ・キーワード・競合管理）"):
+    st.subheader("🔧 管理画面")
+    tab_theme, tab_kw, tab_comp = st.tabs(["🌐 テーマ管理", "🔑 キーワード管理", "🎯 競合管理"])
+
+    # ─── テーマ管理 ────────────────────────────────────────
+    with tab_theme:
+        st.markdown("### テーマの追加・編集・削除")
+
+        # 新規追加フォーム
+        with st.form("add_theme_form"):
+            st.markdown("**新しいテーマを追加**")
+            col_name, col_color = st.columns([2, 1])
+            with col_name:
+                new_theme_name = st.text_input("テーマ名", placeholder="例：MaaS, Web3, 量子コンピュータ")
+            with col_color:
+                new_theme_color = st.color_picker("テーマカラー", value="#4F8EF7")
+            new_theme_desc = st.text_input("説明（オプション）", placeholder="例：mobility as a service, smart mobility")
+            submitted = st.form_submit_button("🌐 テーマ追加")
+            if submitted:
+                if new_theme_name.strip():
+                    ok = add_theme(new_theme_name.strip(), new_theme_color, new_theme_desc.strip())
+                    if ok:
+                        st.success(f"✅ 「{new_theme_name}」を追加しました。config.py に RSS/arXiv クエリを追加することで収集が有効になります。")
+                        st.rerun()
+                    else:
+                        st.error("⚠️ 追加に失敗しました（テーマ名が重複している可能性）")
+                else:
+                    st.warning("テーマ名を入力してください")
+
+        st.divider()
+
+        # 現在のテーマ一覧（編集・削除）
+        st.markdown("### 現在のテーマ一覧")
+        db_themes_list = get_themes()
+        if db_themes_list:
+            for t in db_themes_list:
+                col_color_prev, col_info, col_edit, col_del = st.columns([0.3, 3, 1.5, 0.8])
+                with col_color_prev:
                     st.markdown(
-                        f'<div style="font-size:20px;font-weight:bold;color:#111;margin:10px 0 4px;">{title_ja}</div>'
-                        f'<div style="font-size:13px;color:#888;margin-bottom:12px;">{title_en}</div>',
+                        f'<div style="width:28px;height:28px;background:{t["color"]};border-radius:50%;margin-top:6px;"></div>',
                         unsafe_allow_html=True
                     )
-                    st.markdown(f"**要旨：** {art['summary']}")
-                    st.markdown(f"**🎯 提案資料/メルマガへの示唆：** {art['action_hint']}")
-                    link_label = "論文を読む →" if art["content_type"] == "paper" else "元記事を読む →"
-                    st.markdown(f"[{link_label}]({art['url']})")
+                with col_info:
+                    st.markdown(f"**{t['name']}**")
+                    if t.get("description"):
+                        st.caption(t["description"])
+                with col_edit:
+                    if st.button("✏️ 編集", key=f"edit_theme_{t['id']}"):
+                        st.session_state[f"editing_theme_{t['id']}"] = True
+
+                    if st.session_state.get(f"editing_theme_{t['id']}"):
+                        with st.form(f"edit_theme_form_{t['id']}"):
+                            e_name  = st.text_input("テーマ名", value=t["name"])
+                            e_color = st.color_picker("カラー", value=t["color"])
+                            e_desc  = st.text_input("説明", value=t.get("description", ""))
+                            if st.form_submit_button("保存"):
+                                ok = update_theme(t["id"], e_name.strip(), e_color, e_desc.strip())
+                                if ok:
+                                    st.success("✅ 更新しました")
+                                    st.session_state.pop(f"editing_theme_{t['id']}", None)
+                                    st.rerun()
+                                else:
+                                    st.error("更新に失敗しました")
+                with col_del:
+                    if st.button("🗑️", key=f"del_theme_{t['id']}"):
+                        ok = delete_theme(t["id"])
+                        if ok:
+                            st.success("削除しました")
+                            st.rerun()
+
+        else:
+            st.info("テーマが登録されていません")
+
+        st.info("💡 **新テーマ追加後**: `config.py` の `THEMES_RSS` と `THEMES_ARXIV` にそのテーマ名でRSSフィード・arXivクエリを追加すると収集が有効になります。")
+
+
+    # ─── キーワード管理 ───────────────────────────────
+    with tab_kw:
+        st.markdown("### キーワードの追加・削除")
+        theme_names = [t["name"] for t in get_themes()] or list(THEMES.keys())
+        col_theme, col_kw = st.columns([1, 2])
+        with col_theme:
+            theme_sel = st.selectbox("テーマ", theme_names, key="kw_theme")
+        with col_kw:
+            new_kw = st.text_input("新しいキーワード", placeholder="例：langchain, agent framework")
+
+        if st.button("🔑 キーワード追加", key="add_kw"):
+            if new_kw.strip():
+                ok = add_keyword(theme_sel, new_kw.strip())
+                if ok:
+                    st.success(f"✅ '{new_kw}' を {theme_sel} に追加しました")
+                    st.rerun()
+                else:
+                    st.error("⚠️ 追加に失敗しました（重複の可能性）")
+            else:
+                st.warning("キーワードを入力してください")
+
+        st.divider()
+        st.markdown("### 現在のキーワード一覧")
+        all_keywords = get_keywords()
+        if all_keywords:
+            for theme in theme_names:
+                theme_kws = [k for k in all_keywords if k["theme"] == theme]
+                if theme_kws:
+                    color = THEMES.get(theme, {}).get("color", "#888")
+                    st.markdown(f'<h4 style="color:{color}">● {theme}</h4>', unsafe_allow_html=True)
+                    for kw in theme_kws:
+                        col_kw_name, col_del = st.columns([4, 1])
+                        with col_kw_name:
+                            st.caption(f"• {kw['keyword']}")
+                        with col_del:
+                            if st.button("🗑️", key=f"del_kw_{kw['id']}"):
+                                ok = delete_keyword(kw["id"])
+                                if ok:
+                                    st.success("削除しました")
+                                    st.rerun()
+        else:
+            st.info("まだキーワードが登録されていません")
+
+    # ─── 競合管理 ──────────────────────────────────────
+    with tab_comp:
+        st.markdown("### 競合の追加・削除")
+        col_name, col_url = st.columns([1.5, 2])
+        with col_name:
+            comp_name = st.text_input("競合名", placeholder="例：Notionai, Kernal")
+        with col_url:
+            comp_url = st.text_input("URL", placeholder="https://example.com")
+
+        comp_memo = st.text_area("メモ", placeholder="競合の特徴、提供内容など")
+
+        if st.button("🎯 競合追加", key="add_comp"):
+            if comp_name.strip():
+                ok = add_competitor(comp_name.strip(), comp_url.strip(), comp_memo.strip())
+                if ok:
+                    st.success(f"✅ '{comp_name}' を追加しました")
+                    st.rerun()
+                else:
+                    st.error("⚠️ 追加に失敗しました（重複の可能性）")
+            else:
+                st.warning("競合名を入力してください")
+
+        st.divider()
+        st.markdown("### 競合一覧")
+        competitors = get_competitors()
+        if competitors:
+            for comp in competitors:
+                col_info, col_del = st.columns([4, 1])
+                with col_info:
+                    st.markdown(f"**{comp['name']}**")
+                    if comp["url"]:
+                        st.caption(f"🔗 {comp['url']}")
+                    if comp["memo"]:
+                        st.caption(f"📝 {comp['memo']}")
+                with col_del:
+                    if st.button("🗑️", key=f"del_comp_{comp['id']}"):
+                        ok = delete_competitor(comp["id"])
+                        if ok:
+                            st.success("削除しました")
+                            st.rerun()
+        else:
+            st.info("まだ競合が登録されていません")

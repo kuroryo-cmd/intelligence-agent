@@ -187,3 +187,181 @@ def get_stats():
         return {"total": 0, "by_theme": {}}
     except Exception:
         return {"total": 0, "by_theme": {}}
+
+
+# ─── キーワード管理 ────────────────────────────────────
+def get_keywords(theme=None):
+    """テーマ別キーワード取得"""
+    try:
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            return []
+
+        if theme:
+            url = f"{SUPABASE_URL}/rest/v1/keywords?theme=eq.{theme}&order=added_at.desc"
+        else:
+            url = f"{SUPABASE_URL}/rest/v1/keywords?order=theme.asc,added_at.desc"
+
+        response = requests.get(url, headers=HEADERS, timeout=10)
+        if response.status_code == 200:
+            return response.json()
+        return []
+    except Exception:
+        return []
+
+
+def add_keyword(theme: str, keyword: str) -> bool:
+    """キーワード追加"""
+    try:
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            return False
+
+        payload = {"theme": theme, "keyword": keyword}
+        response = requests.post(
+            f"{SUPABASE_URL}/rest/v1/keywords",
+            json=payload,
+            headers=HEADERS,
+            timeout=10
+        )
+        return response.status_code in (200, 201)
+    except Exception:
+        return False
+
+
+def delete_keyword(keyword_id: int) -> bool:
+    """キーワード削除"""
+    try:
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            return False
+
+        response = requests.delete(
+            f"{SUPABASE_URL}/rest/v1/keywords?id=eq.{keyword_id}",
+            headers=HEADERS,
+            timeout=10
+        )
+        return response.status_code in (200, 204)
+    except Exception:
+        return False
+
+
+# ─── 競合管理 ──────────────────────────────────────────
+def get_competitors() -> list:
+    """競合一覧取得"""
+    try:
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            return []
+
+        response = requests.get(
+            f"{SUPABASE_URL}/rest/v1/competitors?order=added_at.desc",
+            headers=HEADERS,
+            timeout=10
+        )
+        if response.status_code == 200:
+            return response.json()
+        return []
+    except Exception:
+        return []
+
+
+def add_competitor(name: str, url: str = "", memo: str = "") -> bool:
+    """競合追加"""
+    try:
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            return False
+
+        payload = {"name": name, "url": url, "memo": memo}
+        response = requests.post(
+            f"{SUPABASE_URL}/rest/v1/competitors",
+            json=payload,
+            headers=HEADERS,
+            timeout=10
+        )
+        return response.status_code in (200, 201)
+    except Exception:
+        return False
+
+
+def delete_competitor(competitor_id: int) -> bool:
+    """競合削除"""
+    try:
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            return False
+
+        response = requests.delete(
+            f"{SUPABASE_URL}/rest/v1/competitors?id=eq.{competitor_id}",
+            headers=HEADERS,
+            timeout=10
+        )
+        return response.status_code in (200, 204)
+    except Exception:
+        return False
+
+
+# ─── テーマ管理 ────────────────────────────────────────
+def get_themes() -> list:
+    """テーマ一覧取得（Supabase themes テーブルから）"""
+    try:
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            return []
+
+        response = requests.get(
+            f"{SUPABASE_URL}/rest/v1/themes?order=created_at.asc",
+            headers=HEADERS,
+            timeout=10
+        )
+        if response.status_code == 200:
+            return response.json()
+        return []
+    except Exception:
+        return []
+
+
+def add_theme(name: str, color: str, description: str = "") -> bool:
+    """テーマ追加"""
+    try:
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            return False
+
+        payload = {"name": name, "color": color, "description": description}
+        response = requests.post(
+            f"{SUPABASE_URL}/rest/v1/themes",
+            json=payload,
+            headers=HEADERS,
+            timeout=10
+        )
+        return response.status_code in (200, 201)
+    except Exception:
+        return False
+
+
+def update_theme(theme_id: int, name: str, color: str, description: str = "") -> bool:
+    """テーマ編集"""
+    try:
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            return False
+
+        payload = {"name": name, "color": color, "description": description}
+        response = requests.patch(
+            f"{SUPABASE_URL}/rest/v1/themes?id=eq.{theme_id}",
+            json=payload,
+            headers=HEADERS,
+            timeout=10
+        )
+        return response.status_code in (200, 204)
+    except Exception:
+        return False
+
+
+def delete_theme(theme_id: int) -> bool:
+    """テーマ削除"""
+    try:
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            return False
+
+        response = requests.delete(
+            f"{SUPABASE_URL}/rest/v1/themes?id=eq.{theme_id}",
+            headers=HEADERS,
+            timeout=10
+        )
+        return response.status_code in (200, 204)
+    except Exception:
+        return False

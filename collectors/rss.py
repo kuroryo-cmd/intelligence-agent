@@ -2,11 +2,31 @@ import feedparser
 import requests
 import re
 from datetime import datetime
-from config import THEMES
-from db.database import save_article
+from config import get_theme_rss, get_theme_keywords_default, THEMES
+from db.database import save_article, get_themes, get_keywords
 from analyzer.gemini import generate_hint
 from collectors.summarizer import build_summary, translate_to_ja
 from analyzer.scorer import score_article
+
+
+def _build_theme_config() -> dict:
+    """Supabase から動的にテーマ設定を構築する。失敗時は config.py にフォールバック。"""
+    db_themes = get_themes()
+    if not db_themes:
+        return THEMES
+
+    result = {}
+    for t in db_themes:
+        name = t["name"]
+        color = t.get("color", "#888888")
+        db_kws = [k["keyword"] for k in get_keywords(name)]
+        keywords = db_kws if db_kws else get_theme_keywords_default(name)
+        result[name] = {
+            "keywords": keywords,
+            "color": color,
+            "rss_feeds": get_theme_rss(name),
+        }
+    return result
 
 
 def _strip_html(text: str) -> str:
@@ -34,7 +54,8 @@ def _parse_date(entry) -> str:
 
 def collect_rss():
     saved = 0
-    for theme, cfg in THEMES.items():
+    themes = _build_theme_config()
+    for theme, cfg in themes.items():
         keywords = cfg["keywords"]
         for source_name, url in cfg["rss_feeds"]:
             try:

@@ -1,8 +1,8 @@
 import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime
-from config import THEMES
-from db.database import save_article
+from config import get_theme_arxiv, get_theme_keywords_default, THEMES
+from db.database import save_article, get_themes, get_keywords
 from analyzer.gemini import generate_hint
 from collectors.summarizer import translate_to_ja
 from analyzer.scorer import score_article
@@ -11,10 +11,29 @@ ARXIV_API = "https://export.arxiv.org/api/query"
 NS = {"atom": "http://www.w3.org/2005/Atom"}
 
 
+def _build_theme_config() -> dict:
+    """Supabase から動的にテーマ設定を構築する。失敗時は config.py にフォールバック。"""
+    db_themes = get_themes()
+    if not db_themes:
+        return THEMES
+
+    result = {}
+    for t in db_themes:
+        name = t["name"]
+        db_kws = [k["keyword"] for k in get_keywords(name)]
+        keywords = db_kws if db_kws else get_theme_keywords_default(name)
+        result[name] = {
+            "keywords": keywords,
+            "arxiv_query": get_theme_arxiv(name),
+        }
+    return result
+
+
 def collect_arxiv():
     saved = 0
-    for theme, cfg in THEMES.items():
-        query = cfg["arxiv_query"]
+    themes = _build_theme_config()
+    for theme, cfg in themes.items():
+        query = cfg.get("arxiv_query", "")
         params = {
             "search_query": f"all:{query}",
             "start": 0,
@@ -29,7 +48,7 @@ def collect_arxiv():
             print(f"  [arxiv skip] {theme}: {e}")
             continue
 
-        keywords = cfg["keywords"]
+        keywords = cfg.get("keywords", [])
 
         for entry in root.findall("atom:entry", NS):
             title = entry.findtext("atom:title", "", NS).strip().replace("\n", " ")
