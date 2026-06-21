@@ -30,10 +30,6 @@ THEMES_RSS = {
     ],
     "FDE": [
         ("Palantir Blog", "https://blog.palantir.com/feed"),
-        ("Scale AI Blog", "https://scale.com/blog/feed"),
-        ("Andreessen Horowitz", "https://a16z.com/feed/"),
-        ("Medium - Forward Deployed", "https://medium.com/tag/forward-deployed-engineer/feed"),
-        ("Medium - Solution Engineering", "https://medium.com/tag/solution-engineering/feed"),
     ],
 }
 
@@ -64,8 +60,8 @@ THEMES_KEYWORDS_DEFAULT = {
         "セマンティックレイヤー", "オントロジー", "data mesh", "data catalog",
     ],
     "FDE": [
-        "forward deployed engineer", "forward deployed", "FDE",
-        "フォワードデプロイドエンジニア", "フォワードデプロイ",
+        "Palantir", "forward deployed engineer", "forward deployed", "FDE",
+        "フォワードデプロイ", "パランティア",
     ],
 }
 
