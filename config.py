@@ -29,11 +29,11 @@ THEMES_RSS = {
         ("ZDNet Japan", "https://japan.zdnet.com/rss/index.rdf"),
     ],
     "FDE": [
+        ("Palantir Blog", "https://blog.palantir.com/feed"),
+        ("Scale AI Blog", "https://scale.com/blog/feed"),
         ("Andreessen Horowitz", "https://a16z.com/feed/"),
-        ("First Round Review", "https://review.firstround.com/rss.xml"),
-        ("Lenny's Newsletter", "https://www.lennysnewsletter.com/feed"),
-        ("TechCrunch", "https://techcrunch.com/feed/"),
-        ("VentureBeat", "https://venturebeat.com/feed/"),
+        ("Medium - Forward Deployed", "https://medium.com/tag/forward-deployed-engineer/feed"),
+        ("Medium - Solution Engineering", "https://medium.com/tag/solution-engineering/feed"),
     ],
 }
 
@@ -42,7 +42,7 @@ THEMES_ARXIV = {
     "Agentic AI": '(cat:cs.AI OR cat:cs.LG OR cat:cs.CL) AND (abs:"agentic" OR abs:"AI agent" OR abs:"autonomous agent" OR abs:"agent framework" OR ti:"agentic" OR ti:"agent")',
     "ゲーミフィケーション": '(cat:cs.AI OR cat:cs.HC OR cat:cs.LG OR cat:econ.GN) AND (abs:"gamification" OR abs:"gamified" OR abs:"loyalty program" OR abs:"reward program" OR abs:"customer engagement" OR abs:"behavioral" OR ti:"gamification" OR ti:"loyalty")',
     "セマンティックレイヤー": '(cat:cs.DB OR cat:cs.AI OR cat:cs.IR OR cat:cs.DC) AND (abs:"semantic layer" OR abs:"knowledge graph" OR abs:"ontology" OR abs:"data warehouse" OR abs:"data mesh" OR abs:"data catalog" OR ti:"semantic" OR ti:"knowledge graph")',
-    "FDE": '(cat:cs.SE OR cat:cs.AI OR cat:cs.HC) AND (abs:"customer success" OR abs:"enterprise software" OR abs:"solution engineering" OR abs:"technical account" OR ti:"forward deployed" OR ti:"enterprise AI")',
+    "FDE": '(cat:cs.SE OR cat:cs.AI OR cat:cs.HC) AND (abs:"forward deployed engineer" OR abs:"forward deployed" OR ti:"forward deployed")',
 }
 
 # ─── テーマごとのキーワード定義（フォールバック用） ─────────────
@@ -64,10 +64,8 @@ THEMES_KEYWORDS_DEFAULT = {
         "セマンティックレイヤー", "オントロジー", "data mesh", "data catalog",
     ],
     "FDE": [
-        "forward deployed engineer", "forward deployed", "FDE", "solution engineer",
-        "technical account manager", "customer engineering", "enterprise AI",
-        "implementation engineer", "customer success", "professional services",
-        "SaaS implementation", "enterprise software", "顧客実装", "フォワードデプロイ",
+        "forward deployed engineer", "forward deployed", "FDE",
+        "フォワードデプロイドエンジニア", "フォワードデプロイ",
     ],
 }
 
